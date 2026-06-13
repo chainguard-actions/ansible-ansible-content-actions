@@ -1,0 +1,37 @@
+---
+repos:
+  # - repo: https://github.com/rhysd/actionlint
+  #   rev: v1.7.1
+  #   hooks:
+  #     - id: actionlint
+
+  - repo: https://github.com/pycontribs/mirrors-prettier
+    rev: v3.3.2
+    hooks:
+      - id: prettier
+        always_run: true
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.3.0
+    hooks:
+      - id: codespell
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks.git
+    rev: v4.6.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+      - id: check-byte-order-marker
+      - id: check-executables-have-shebangs
+      - id: check-merge-conflict
+      - id: debug-statements
+        language_version: python3
+
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        files: \.(yaml|yml)$
+        types: [file, yaml]
+        entry: yamllint --strict
