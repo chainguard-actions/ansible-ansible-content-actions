@@ -1,0 +1,25 @@
+---
+name: ansible-content-actions
+description: A set of GitHub actions for testing Ansible collections.
+author: Ansible Devtools Team
+branding:
+  icon: check-circle
+  color: gray-dark
+inputs:
+  path:
+    description: |
+      Path to the collection to add tox-ansible.ini file.
+  base_ref:
+    description: The pull requests base.
+  repo:
+    description: Repository URL
+  environment:
+    description: The deployment environment
+  ah_publish:
+    description: Publish the collection on the Automation hub
+  galaxy_publish:
+    description: Publish the collection on Ansible Galaxy
+  collection_pre_install:
+    description: Pre-install specified collections
+runs:
+  using: composite

@@ -1,0 +1,22 @@
+name: Test basic inputs
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/heads/main
+      GITHUB_EVENT_NAME: push
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          path: "."
+          repo: "https://github.com/ansible/ansible-content-actions"
+          environment: "staging"
+          base_ref: "main"
+      - name: Assert action ran successfully
+        run: |
+          echo "Action completed without error"
+          echo "PASS"
