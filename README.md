@@ -10,6 +10,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 |---------|-----|-----------------|
 | v0.1.1 | [`v0.1.1`](https://github.com/chainguard-actions/ansible-ansible-content-actions/tree/v0.1.1) | [`8c68b0a`](https://github.com/ansible/ansible-content-actions/commit/8c68b0a711cfdcce61b8044ad6cbe462ec9ed15f) |
 | v1.0.0 | [`v1.0.0`](https://github.com/chainguard-actions/ansible-ansible-content-actions/tree/v1.0.0) | [`6e46fe0`](https://github.com/ansible/ansible-content-actions/commit/6e46fe08529c14d9081b97cdb25a02364ead1ec4) |
+| v1.1.0 | [`v1.1.0`](https://github.com/chainguard-actions/ansible-ansible-content-actions/tree/v1.1.0) | [`7dc7e15`](https://github.com/ansible/ansible-content-actions/commit/7dc7e15a53c2ae8bd092461e53dafd6627e34ac6) |
 
 ## Privacy
 
