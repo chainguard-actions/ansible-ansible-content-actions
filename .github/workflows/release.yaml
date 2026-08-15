@@ -1,0 +1,40 @@
+---
+name: Release collection
+"on":
+  workflow_call:
+    inputs:
+      ah_publish:
+        description: Publish the collection on automation hub
+        default: true
+        type: boolean
+      environment:
+        description: The deployment environment
+        required: true
+        type: string
+      galaxy_publish:
+        default: true
+        description: Publish the collection on galaxy
+        type: boolean
+    secrets:
+      ah_token:
+        required: false
+      ansible_galaxy_api_key:
+        required: false
+
+permissions: {}
+
+jobs:
+  release_automation_hub:
+    uses: ansible/ansible-content-actions/.github/workflows/release_ah.yaml@11fc6c1c1a2421cac44cc5c40b6f72656745f1f9 # main
+    with:
+      environment: release
+    secrets:
+      ah_token: "${{ secrets.ah_token }}"
+  release_galaxy:
+    uses: ansible/ansible-content-actions/.github/workflows/release_galaxy.yaml@11fc6c1c1a2421cac44cc5c40b6f72656745f1f9 # main
+    needs:
+      - release_automation_hub
+    with:
+      environment: release
+    secrets:
+      ansible_galaxy_api_key: "${{ secrets.ansible_galaxy_api_key }}"

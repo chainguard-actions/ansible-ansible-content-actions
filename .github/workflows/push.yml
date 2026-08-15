@@ -1,0 +1,15 @@
+---
+# See https://github.com/ansible/team-devtools/blob/main/.github/workflows/push.yml
+name: push
+"on":
+  push:
+    branches:
+      - main
+      - "releases/**"
+      - "stable/**"
+
+permissions: {}
+
+jobs:
+  ack:
+    uses: ansible/team-devtools/.github/workflows/push.yml@52cd2a024bb3d3a22bba5d9169798bb9b13848a4 # main

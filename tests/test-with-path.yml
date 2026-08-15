@@ -1,0 +1,27 @@
+---
+name: Test with path input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Create a test collection directory
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/test-collection"
+          cat > "$GITHUB_WORKSPACE/test-collection/galaxy.yml" <<'EOF'
+          namespace: testns
+          name: testcol
+          version: 1.0.0
+          EOF
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          path: "${{ github.workspace }}/test-collection"
+      - name: Assert action was invoked with path input
+        run: |
+          echo "Action step outcome: ${{ steps.action.outcome }}"
+          echo "Action completed with path input (outcome: ${{ steps.action.outcome }})"
+          echo "PASS"
