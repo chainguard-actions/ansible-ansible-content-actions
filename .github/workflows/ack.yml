@@ -1,0 +1,13 @@
+---
+# See https://github.com/ansible/team-devtools/blob/main/.github/workflows/ack.yml
+name: ack
+on:
+  pull_request_target:
+    types: [opened, labeled, unlabeled, synchronize]
+
+permissions: {}
+
+jobs:
+  ack:
+    uses: ansible/team-devtools/.github/workflows/ack.yml@b7222d7e2bd43e21b247fcdcb1a4014534637da0 # main
+    secrets: inherit

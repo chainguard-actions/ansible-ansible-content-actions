@@ -1,0 +1,39 @@
+---
+name: Ansible Galaxy release
+"on":
+  workflow_call:
+    inputs:
+      environment:
+        description: The deployment environment
+        required: true
+        type: string
+      galaxy_publish:
+        default: true
+        description: Publish the collection on galaxy
+        type: boolean
+    secrets:
+      ansible_galaxy_api_key:
+        required: false
+
+permissions: {}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    name: Galaxy release
+    environment: "${{ inputs.environment }}"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Build the collection
+        run: |
+          ansible-galaxy collection build -v --force
+      - name: Publish the collection on Galaxy
+        if: "${{ inputs.galaxy_publish }}"
+        env:
+          ANSIBLE_GALAXY_API_KEY: ${{ secrets.ansible_galaxy_api_key }}
+        run: |
+          [[ -n "$ANSIBLE_GALAXY_API_KEY" ]] || { echo "ansible_galaxy_api_key is required to publish on galaxy" ; exit 1; }
+
+          TARBALL=$(ls -1 ./*.tar.gz)
+
+          ansible-galaxy collection publish "${TARBALL}" --api-key "$ANSIBLE_GALAXY_API_KEY"

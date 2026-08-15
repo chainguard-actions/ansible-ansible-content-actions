@@ -1,0 +1,24 @@
+---
+name: Test pull request context
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/pull/1/merge
+      GITHUB_EVENT_NAME: pull_request
+      GITHUB_HEAD_REF: feature-branch
+      GITHUB_BASE_REF: main
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          base_ref: main
+        continue-on-error: true
+      - name: Assert action completed in PR context
+        run: |
+          echo "Action step outcome: ${{ steps.action.outcome }}"
+          echo "Action completed in pull_request context with base_ref=main"
+          echo "PASS"

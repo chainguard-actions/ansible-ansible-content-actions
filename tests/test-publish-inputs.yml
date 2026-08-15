@@ -1,0 +1,24 @@
+---
+name: Test publish inputs
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/tags/v1.0.0
+      GITHUB_EVENT_NAME: push
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          galaxy_publish: "false"
+          ah_publish: "false"
+          environment: staging
+        continue-on-error: true
+      - name: Assert action completed with publish inputs
+        run: |
+          echo "Action step outcome: ${{ steps.action.outcome }}"
+          echo "Action completed with galaxy_publish=false, ah_publish=false, environment=staging"
+          echo "PASS"

@@ -1,0 +1,45 @@
+---
+name: release
+
+"on":
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  # https://github.com/marketplace/actions/actions-tagger
+  actions-tagger:
+    runs-on: ubuntu-latest
+    permissions:
+      # Give the default GITHUB_TOKEN write permission.
+      # https://github.blog/changelog/2023-02-02-github-actions-updating-the-default-github_token-permissions-to-read-only/
+      contents: write
+    steps:
+      - name: Retrieve version
+        id: version
+        run: |
+          tag=${GITHUB_REF/refs\/tags\//}
+          version=${tag#v}
+          major=${version%%.*}
+          safe_tag=$(printf '%s' "$tag" | tr -d '\n\r')
+          safe_version=$(printf '%s' "$version" | tr -d '\n\r')
+          safe_major=$(printf '%s' "$major" | tr -d '\n\r')
+          echo "tag=$safe_tag" >> "$GITHUB_OUTPUT"
+          echo "version=$safe_version" >> "$GITHUB_OUTPUT"
+          echo "major=$safe_major" >> "$GITHUB_OUTPUT"
+
+      - name: Check out src from Git
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: Force update major tag
+        env:
+          MAJOR: ${{ steps.version.outputs.major }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git tag "v${MAJOR}" "${TAG}" -f
+          git push origin "refs/tags/v${MAJOR}" -f

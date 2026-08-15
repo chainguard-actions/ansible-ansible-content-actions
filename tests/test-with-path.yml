@@ -1,5 +1,5 @@
 ---
-name: Test basic usage (no inputs)
+name: Test with path input
 on:
   workflow_dispatch:
 jobs:
@@ -7,20 +7,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Invoke action with no inputs
+      - name: Invoke action with path input
         id: action
         uses: .
+        with:
+          path: ${{ github.workspace }}
         continue-on-error: true
-      - name: Assert action was invoked
+      - name: Assert action was invoked with path input
         env:
           OUTCOME: ${{ steps.action.outcome }}
         run: |
           echo "Action outcome: $OUTCOME"
-          # The action has no steps defined (composite with no steps).
-          # It either succeeds (no-op) or fails with a parse error.
-          # Either way, the action was invoked — this is the expected behavior.
           if [ "$OUTCOME" = "success" ] || [ "$OUTCOME" = "failure" ]; then
-            echo "PASS: action was invoked (outcome=$OUTCOME)"
+            echo "PASS: action was invoked with path input (outcome=$OUTCOME)"
           else
             echo "FAIL: unexpected outcome: $OUTCOME"
             exit 1
