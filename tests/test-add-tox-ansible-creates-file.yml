@@ -1,5 +1,5 @@
 ---
-name: Test basic usage - add_tox_ansible creates tox-ansible.ini
+name: Test add_tox_ansible creates tox-ansible.ini when missing
 on:
   workflow_dispatch:
 jobs:
@@ -8,28 +8,27 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Prepare a collection directory in workspace
+      - name: Set up a collection directory without tox-ansible.ini
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/test-collection"
-          rm -f "$GITHUB_WORKSPACE/test-collection/tox-ansible.ini"
-          echo "Setup: test-collection directory ready"
+          mkdir -p "$GITHUB_WORKSPACE/test-creates-file"
+          rm -f "$GITHUB_WORKSPACE/test-creates-file/tox-ansible.ini"
+          echo "Setup: no tox-ansible.ini in test-creates-file"
 
-      - name: Run add_tox_ansible sub-action
-        id: action
+      - name: Run add_tox_ansible action
         uses: ./.github/actions/add_tox_ansible
         with:
-          path: ${{ github.workspace }}/test-collection
+          path: ${{ github.workspace }}/test-creates-file
 
       - name: Assert tox-ansible.ini was created
         run: |
           echo "Checking if tox-ansible.ini was created..."
-          if [ ! -f "$GITHUB_WORKSPACE/test-collection/tox-ansible.ini" ]; then
+          if [ ! -f "$GITHUB_WORKSPACE/test-creates-file/tox-ansible.ini" ]; then
             echo "FAIL: tox-ansible.ini was not created"
             exit 1
           fi
           echo "Contents of tox-ansible.ini:"
-          cat "$GITHUB_WORKSPACE/test-collection/tox-ansible.ini"
-          if ! grep -q "\[ansible\]" "$GITHUB_WORKSPACE/test-collection/tox-ansible.ini"; then
+          cat "$GITHUB_WORKSPACE/test-creates-file/tox-ansible.ini"
+          if ! grep -q "\[ansible\]" "$GITHUB_WORKSPACE/test-creates-file/tox-ansible.ini"; then
             echo "FAIL: tox-ansible.ini does not contain [ansible] section"
             exit 1
           fi

@@ -1,0 +1,39 @@
+---
+name: Test add_tox_ansible with default path (workspace root)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Prepare a collection directory in workspace
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/test-default-path"
+          rm -f "$GITHUB_WORKSPACE/test-default-path/tox-ansible.ini"
+          echo "Setup: test-default-path directory ready, no tox-ansible.ini"
+
+      - name: Run add_tox_ansible action with explicit path
+        uses: ./.github/actions/add_tox_ansible
+        with:
+          path: ${{ github.workspace }}/test-default-path
+
+      - name: Assert tox-ansible.ini was created with expected content
+        run: |
+          echo "Checking tox-ansible.ini content..."
+          if [ ! -f "$GITHUB_WORKSPACE/test-default-path/tox-ansible.ini" ]; then
+            echo "FAIL: tox-ansible.ini was not created"
+            exit 1
+          fi
+          echo "Contents:"
+          cat "$GITHUB_WORKSPACE/test-default-path/tox-ansible.ini"
+          if ! grep -q "\[ansible\]" "$GITHUB_WORKSPACE/test-default-path/tox-ansible.ini"; then
+            echo "FAIL: missing [ansible] section"
+            exit 1
+          fi
+          if ! grep -q "skip" "$GITHUB_WORKSPACE/test-default-path/tox-ansible.ini"; then
+            echo "FAIL: missing skip entries"
+            exit 1
+          fi
+          echo "PASS: tox-ansible.ini created with correct content"

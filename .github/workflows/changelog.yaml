@@ -1,0 +1,23 @@
+---
+name: Check changelog
+"on":
+  workflow_call: null
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    name: Requires changelog
+    if: "!contains(github.event.pull_request.labels.*.name, 'skip-changelog')"
+    steps:
+      - name: Checkout the collection repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: "${{ github.event.pull_request.head.sha }}"
+          fetch-depth: "0"
+      - name: Validate changelog
+        uses: >-
+          ansible/ansible-content-actions/.github/actions/ansible_validate_changelog@11fc6c1c1a2421cac44cc5c40b6f72656745f1f9 # main

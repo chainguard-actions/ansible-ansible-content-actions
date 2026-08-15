@@ -1,0 +1,347 @@
+name: Integration tests
+on:
+  workflow_call:
+    inputs:
+      collection_pre_install:
+        required: false
+        type: string
+        default: ""
+      lab_title:
+        required: false
+        type: string
+        default: ${{ github.event.repository.name }}
+      cml_lab:
+        default: tests/integration/labs/single.yaml
+        required: false
+        type: string
+      integration_test_path:
+        default: tests/integration/targets
+        required: false
+        type: string
+      network_os:
+        required: true
+        type: string
+      pytest_addopts:
+        default: ""
+        required: false
+        type: string
+      dry_run:
+        required: false
+        type: boolean
+        default: false
+      dry_run_repo:
+        required: false
+        type: string
+        default: ""
+
+    secrets:
+      cml_ssh_password:
+        required: true
+      virl_password:
+        required: true
+      virl_host:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    env:
+      PY_COLORS: "1"
+      source_directory: "./source"
+      dependency_directory: "./dependency"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ansible-version:
+          - stable-2.18
+          - stable-2.19
+          - stable-2.16
+          # - stable-2.15
+          - milestone
+          - devel
+        python-version:
+          - "3.12" # this should always be a common denominator for all the ansible versions
+          # https://github.com/ansible/tox-ansible/blob/main/src/tox_ansible/plugin.py#L45
+        dependency-source:
+          - github
+
+    name: "Integration Tests - Python ${{ matrix.python-version }} / Ansible ${{ matrix.ansible-version }} / ${{ matrix.dependency-source }}"
+    steps:
+      - name: Checkout the collection repository
+        uses: ansible-network/github_actions/.github/actions/checkout_dependency@1982e80100552ec93470eee63e508ebdeb1f73cc # main
+        with:
+          path: ${{ env.source_directory }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: "0"
+        if: ${{ !inputs.dry_run }}
+
+      - name: Checkout the collection repository
+        uses: ansible-network/github_actions/.github/actions/checkout_dependency@1982e80100552ec93470eee63e508ebdeb1f73cc # main
+        with:
+          repository: ${{ inputs.dry_run_repo }}
+          path: ${{ env.source_directory }}
+          fetch-depth: "0"
+        if: ${{ inputs.dry_run }}
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install wheel now for faster builds
+        run: python3 -m pip install wheel --upgrade
+
+      - name: Install ansible-core (${{ matrix.ansible-version }}) - Release/Tag
+        env:
+          ANSIBLE_VERSION: ${{ matrix.ansible-version }}
+        run: python3 -m pip install "https://github.com/ansible/ansible/archive/$ANSIBLE_VERSION.tar.gz" --disable-pip-version-check
+        if: ${{ !contains(matrix.ansible-version, 'devel') && !contains(matrix.ansible-version, 'milestone') }}
+
+      - name: Checkout ansible-core (${{ matrix.ansible-version }}) - Branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: ansible/ansible
+          ref: ${{ matrix.ansible-version }}
+          path: ansible-core-source
+        if: ${{ contains(matrix.ansible-version, 'devel') || contains(matrix.ansible-version, 'milestone') }}
+
+      - name: Install ansible-core (${{ matrix.ansible-version }}) - Branch
+        run: python3 -m pip install ./ansible-core-source --disable-pip-version-check
+        if: ${{ contains(matrix.ansible-version, 'devel') || contains(matrix.ansible-version, 'milestone') }}
+
+      - name: Parse PR body for dependency information
+        id: parse_dependencies
+        run: |
+          echo "netcommon_pr=" >> $GITHUB_OUTPUT
+          echo "utils_pr=" >> $GITHUB_OUTPUT
+          echo "netcommon_fallback=" >> $GITHUB_OUTPUT
+          echo "utils_fallback=" >> $GITHUB_OUTPUT
+
+          PR_BODY=$(python3 -c "import json, os; p=os.environ.get('GITHUB_EVENT_PATH'); d=json.load(open(p,'r',encoding='utf-8')) if p else {}; b=(d.get('pull_request') or {}).get('body') or ''; print(b.replace('\r',''))")
+
+          if [[ -n "$PR_BODY" ]]; then
+            # Only consider links on lines that declare dependency, e.g. "Depends on" or "Depends-on"
+            DEP_LINES=$(printf '%s\n' "$PR_BODY" | grep -iE 'depends[[:space:]-]*on' || true)
+            if [[ -z "$DEP_LINES" ]]; then
+              echo "netcommon_fallback=true" >> $GITHUB_OUTPUT
+              echo "utils_fallback=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+
+            NET_URL=$(printf '%s\n' "$DEP_LINES" | grep -Eo 'https://github.com/ansible-collections/ansible\.netcommon/pull/[0-9]+' | head -1 || true)
+            if [[ -n "$NET_URL" ]]; then
+              NETCOMMON_PR=$(sed -E 's#.*/pull/([0-9]+).*#\1#' <<< "$NET_URL")
+              echo "netcommon_pr=$NETCOMMON_PR" >> $GITHUB_OUTPUT
+            else
+              echo "netcommon_fallback=true" >> $GITHUB_OUTPUT
+            fi
+
+            UTL_URL=$(printf '%s\n' "$DEP_LINES" | grep -Eo 'https://github.com/ansible-collections/ansible\.utils/pull/[0-9]+' | head -1 || true)
+            if [[ -n "$UTL_URL" ]]; then
+              UTILS_PR=$(sed -E 's#.*/pull/([0-9]+).*#\1#' <<< "$UTL_URL")
+              echo "utils_pr=$UTILS_PR" >> $GITHUB_OUTPUT
+            else
+              echo "utils_fallback=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "netcommon_fallback=true" >> $GITHUB_OUTPUT
+            echo "utils_fallback=true" >> $GITHUB_OUTPUT
+          fi
+        if: ${{ !inputs.dry_run }}
+
+      - name: Checkout ansible.netcommon dependency PR
+        uses: ansible-network/github_actions/.github/actions/checkout_dependency@1982e80100552ec93470eee63e508ebdeb1f73cc # main
+        with:
+          repository: ansible-collections/ansible.netcommon
+          ref: refs/pull/${{ steps.parse_dependencies.outputs.netcommon_pr }}/head
+          path: ${{ env.dependency_directory }}/ansible_collections/ansible/netcommon
+          fetch-depth: "0"
+        if: ${{ !inputs.dry_run && steps.parse_dependencies.outputs.netcommon_pr != '' }}
+
+      - name: Checkout ansible.utils dependency PR
+        uses: ansible-network/github_actions/.github/actions/checkout_dependency@1982e80100552ec93470eee63e508ebdeb1f73cc # main
+        with:
+          repository: ansible-collections/ansible.utils
+          ref: refs/pull/${{ steps.parse_dependencies.outputs.utils_pr }}/head
+          path: ${{ env.dependency_directory }}/ansible_collections/ansible/utils
+          fetch-depth: "0"
+        if: ${{ !inputs.dry_run && steps.parse_dependencies.outputs.utils_pr != '' }}
+
+      - name: Pre install collections dependencies first so the collection install does not
+        env:
+          INPUT_SPECS: ${{ inputs.collection_pre_install }}
+          NETCOMMON_FALLBACK: ${{ steps.parse_dependencies.outputs.netcommon_fallback }}
+          UTILS_FALLBACK: ${{ steps.parse_dependencies.outputs.utils_fallback }}
+        run: |
+          INSTALL_CMD="ansible-galaxy collection install --pre"
+          COLLECTIONS_TO_INSTALL=()
+
+          # Read INPUT_SPECS line-by-line to avoid word splitting and glob expansion
+          while IFS= read -r spec; do
+            [[ -z "$spec" ]] && continue
+            if [[ "$NETCOMMON_FALLBACK" == "true" ]] && [[ "$spec" =~ (ansible\.netcommon|ansible-collections/ansible\.netcommon) ]]; then
+              COLLECTIONS_TO_INSTALL+=("$spec")
+              continue
+            fi
+            if [[ "$UTILS_FALLBACK" == "true" ]] && [[ "$spec" =~ (ansible\.utils|ansible-collections/ansible\.utils) ]]; then
+              COLLECTIONS_TO_INSTALL+=("$spec")
+              continue
+            fi
+          done <<< "$INPUT_SPECS"
+
+          while IFS= read -r spec; do
+            [[ -z "$spec" ]] && continue
+            if [[ "$spec" =~ (ansible\.netcommon|ansible-collections/ansible\.netcommon|ansible\.utils|ansible-collections/ansible\.utils) ]]; then
+              continue
+            fi
+            COLLECTIONS_TO_INSTALL+=("$spec")
+          done <<< "$INPUT_SPECS"
+
+          if [[ "${#COLLECTIONS_TO_INSTALL[@]}" -gt 0 ]]; then
+            echo "Running: $INSTALL_CMD ${COLLECTIONS_TO_INSTALL[*]} -p /home/runner/collections"
+            $INSTALL_CMD "${COLLECTIONS_TO_INSTALL[@]}" -p /home/runner/collections
+          else
+            echo "No collections to pre-install"
+          fi
+        if: inputs.collection_pre_install != ''
+
+      - name: Read collection metadata from galaxy.yml
+        id: identify
+        uses: ansible-network/github_actions/.github/actions/identify_collection@1982e80100552ec93470eee63e508ebdeb1f73cc # main
+        with:
+          source_path: ${{ env.source_directory }}
+
+      - name: Build and install dependency collections from PRs
+        env:
+          DEPENDENCY_DIR: ${{ env.dependency_directory }}
+        run: |
+          sed -i 's/\r$//' "$0"
+          if [[ -d "$DEPENDENCY_DIR/ansible_collections/ansible/netcommon" ]]; then
+            echo "Installing ansible.netcommon from PR dependency"
+            cd "$DEPENDENCY_DIR/ansible_collections/ansible/netcommon"
+            ansible-galaxy collection build . --output-path /tmp/
+            ansible-galaxy collection install /tmp/ansible-netcommon-*.tar.gz -p /home/runner/collections --force
+          fi
+
+          if [[ -d "$DEPENDENCY_DIR/ansible_collections/ansible/utils" ]]; then
+            echo "Installing ansible.utils from PR dependency"
+            cd "$DEPENDENCY_DIR/ansible_collections/ansible/utils"
+            ansible-galaxy collection build . --output-path /tmp/
+            ansible-galaxy collection install /tmp/ansible-utils-*.tar.gz -p /home/runner/collections --force
+          fi
+        if: ${{ !inputs.dry_run }}
+
+      - name: Build and install the collection
+        uses: ansible-network/github_actions/.github/actions/build_install_collection@1982e80100552ec93470eee63e508ebdeb1f73cc # main
+        with:
+          install_python_dependencies: true
+          source_path: ${{ env.source_directory }}
+          collection_path: ${{ steps.identify.outputs.collection_path }}
+          tar_file: ${{ steps.identify.outputs.tar_file }}
+          ansible_version: ${{ matrix.ansible-version }}
+
+      - name: Print the ansible version
+        run: ansible --version
+
+      - name: Install the integration test dependency
+        run: python3 -m pip install git+https://github.com/ansible-network/pytest-ansible-network-integration.git
+
+      - name: Install the rest of the dependencies
+        run: python3 -m pip install cmlutils pytest-xdist virl2_client==2.7.1
+
+      - name: Clear current lab id if any
+        if: ${{ !inputs.dry_run }}
+        run: "cml clear"
+        continue-on-error: true
+        env:
+          CML_VERIFY_CERT: false
+          VIRL_HOST: ${{ secrets.virl_host }}
+          VIRL_PASSWORD: ${{ secrets.virl_password }}
+          VIRL_USERNAME: admin
+
+      - name: Create the lab title
+        env:
+          ANSIBLE_VERSION: ${{ matrix.ansible-version }}
+          PYTHON_VERSION: ${{ matrix.python-version }}
+          LAB_TITLE: ${{ inputs.lab_title }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Clean up matrix values by removing special characters
+          CLEAN_ANSIBLE_VERSION=$(echo "$ANSIBLE_VERSION" | sed 's/[^a-zA-Z0-9]//g')
+          CLEAN_PYTHON_VERSION=$(echo "$PYTHON_VERSION" | sed 's/[^a-zA-Z0-9]//g')
+          safe_lab_title=$(printf '%s' "$LAB_TITLE" | tr -d '\n\r')
+          safe_pr_number=$(printf '%s' "$PR_NUMBER" | tr -d '\n\r')
+
+          if [[ "$EVENT_NAME" == 'pull_request_target' ]]; then
+            safe=$(printf '%s' "${safe_lab_title}_PR${safe_pr_number}_${CLEAN_ANSIBLE_VERSION}_py${CLEAN_PYTHON_VERSION}" | tr -d '\n\r')
+            echo "CLABTITLE=$safe" >> $GITHUB_ENV
+          elif [[ "$EVENT_NAME" == 'workflow_dispatch' ]]; then
+            shashort=$(git rev-parse --short HEAD)
+            uuidval=$(uuidgen | cut -c 1-8)
+            safe=$(printf '%s' "${safe_lab_title}_${shashort}_${uuidval}_${CLEAN_ANSIBLE_VERSION}_py${CLEAN_PYTHON_VERSION}" | tr -d '\n\r')
+            echo "CLABTITLE=$safe" >> $GITHUB_ENV
+          fi
+
+      - name: Print the lab title
+        run: echo "$CLABTITLE"
+
+      - name: Add Lab Title to the lab file
+        env:
+          NETWORK_OS: ${{ inputs.network_os }}
+          CML_LAB: ${{ inputs.cml_lab }}
+        run: |
+          # Use Python to perform the substitution safely, avoiding sed delimiter injection
+          python3 - <<'PYEOF'
+          import os, re
+          network_os = os.environ['NETWORK_OS']
+          clabtitle  = os.environ['CLABTITLE']
+          cml_lab    = os.environ['CML_LAB']
+          with open(cml_lab, 'r') as f:
+              content = f.read()
+          content = content.replace('title: ' + network_os, 'title: ' + clabtitle)
+          with open(cml_lab, 'w') as f:
+              f.write(content)
+          PYEOF
+        working-directory: ${{ steps.identify.outputs.collection_path }}
+
+      - name: Run integration tests
+        if: ${{ !inputs.dry_run }}
+        env:
+          ANSIBLE_FORCE_COLOR: "1"
+          ANSIBLE_NETWORK_OS: ${{ inputs.network_os }}
+          CML_SSH_PASSWORD: ${{ secrets.cml_ssh_password }}
+          CML_SSH_PORT: 1122
+          CML_SSH_USER: sysadmin
+          VIRL_HOST: ${{ secrets.virl_host }}
+          VIRL_PASSWORD: ${{ secrets.virl_password }}
+          VIRL_USERNAME: admin
+          INTEGRATION_TEST_PATH: ${{ inputs.integration_test_path }}
+          CML_LAB: ${{ inputs.cml_lab }}
+          PYTEST_ADDOPTS: ${{ inputs.pytest_addopts }}
+        run: >-
+          python3 -m pytest tests/integration
+          --integration-tests-path "$INTEGRATION_TEST_PATH"
+          --cml-lab "$CML_LAB"
+          ${PYTEST_ADDOPTS:+"$PYTEST_ADDOPTS"}
+        working-directory: ${{ steps.identify.outputs.collection_path }}
+
+      - name: Attempt to remove any labs in case the workflow was cancelled
+        if: cancelled() || ${{ !inputs.dry_run }}
+        run: echo "$CML_LABS" | tr -d '\n' | xargs -d ',' -i sh -c  'cml use --id {} && cml rm --force --no-confirm'
+        continue-on-error: true
+        env:
+          CML_VERIFY_CERT: false
+          VIRL_HOST: ${{ secrets.virl_host }}
+          VIRL_PASSWORD: ${{ secrets.virl_password }}
+          VIRL_USERNAME: admin
+
+      - name: Upload logs
+        if: ${{ !inputs.dry_run }}
+        uses: coactions/upload-artifact@ec1957e16e4ecd304d3a115907ccb4ba5f636e9d # v4
+        with:
+          name: logs-${{ matrix.ansible-version }}-py${{ matrix.python-version }}
+          path: /home/runner/test_logs/

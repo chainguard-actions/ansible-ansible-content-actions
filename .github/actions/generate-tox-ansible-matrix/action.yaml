@@ -1,0 +1,53 @@
+---
+name: generate-tox-ansible-matrix
+description: Generate a tox ansible matrix for the given scope.
+
+inputs:
+  scope:
+    description: "Scope to generate matrix for. Allowed values: all, sanity, unit, integration"
+    required: false
+    default: all
+
+outputs:
+  envlist:
+    description: "The generated tox env list."
+    value: ${{ steps.generate-matrix.outputs.envlist }}"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      with:
+        submodules: true
+
+    # `required: true` seems to be no-op for actions?
+    # https://github.com/actions/runner/issues/1070
+    - name: Fail early if no scope was provided for matrix generation
+      if: ${{ inputs.scope == '' }}
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+      with:
+        script: |
+          core.setFailed('A scope needs to be provided to generate matrix.')
+
+    - name: Install the latest version of uv
+      uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+      with:
+        version: "latest"
+
+    - name: "Check for tox-ansible.ini file, else add default"
+      run: >-
+        [ -e tox-ansible.ini ] || { echo "[ansible]" > tox-ansible.ini && echo
+        -e "skip =\n\tpy3.7\n\tpy3.8\n\t2.9\n\t2.10\n\t2.11\n\t2.12\n\t2.13" >>
+        tox-ansible.ini; }
+      shell: bash
+
+    - name: Generate matrix
+      id: generate-matrix
+      shell: bash
+      env:
+        SCOPE: ${{ inputs.scope }}
+      run: |
+        output=$(uv run tox --ansible --gh-matrix --matrix-scope "$SCOPE" --conf tox-ansible.ini)
+        echo "$output"
+        safe=$(printf '%s' "$output" | tr -d '\n\r')
+        echo "envlist=$safe" >> $GITHUB_OUTPUT

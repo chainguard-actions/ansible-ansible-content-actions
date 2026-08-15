@@ -1,0 +1,65 @@
+---
+name: Ansible lint
+"on":
+  workflow_call:
+    inputs:
+      args:
+        description: Arguments to be passed to ansible-lint command.
+        required: false
+        default: ""
+        type: string
+      setup_python:
+        description: If false, this action will not setup python and will instead rely on the already installed python.
+        required: false
+        default: true
+        type: boolean
+      working_directory:
+        description: The directory where to run ansible-lint from. Default is `github.workspace`.
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Ansible Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: "${{github.event.pull_request.head.ref}}"
+          repository: "${{ github.event.pull_request.head.repo.full_name }}"
+      - name: Process inputs
+        id: inputs
+        shell: bash
+        env:
+          WORKING_DIRECTORY: ${{ inputs.working_directory }}
+          GITHUB_WORKSPACE_VAL: ${{ github.workspace }}
+        run: |
+          if [[ -n "$WORKING_DIRECTORY" ]]; then
+            safe=$(printf '%s' "$WORKING_DIRECTORY" | tr -d '\n\r')
+            echo "working_directory=$safe" >> $GITHUB_OUTPUT
+          else
+            safe=$(printf '%s' "$GITHUB_WORKSPACE_VAL" | tr -d '\n\r')
+            echo "working_directory=$safe" >> $GITHUB_OUTPUT
+          fi
+      - name: Set up Python
+        if: inputs.setup_python == 'true'
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          cache: pip
+          cache-dependency-path: ${{ steps.inputs.outputs.working_directory }}/.git/ansible-lint-requirements.txt
+          python-version: "3.14"
+      - name: Install ansible-lint from pip
+        shell: bash
+        run: |
+          pip install ansible-lint
+          ansible-lint --version
+      - name: Run ansible-lint
+        shell: bash
+        working-directory: ${{ steps.inputs.outputs.working_directory }}
+        env:
+          ANSIBLE_LINT_ARGS: ${{ inputs.args }}
+        run: ansible-lint ${ANSIBLE_LINT_ARGS:+"$ANSIBLE_LINT_ARGS"}

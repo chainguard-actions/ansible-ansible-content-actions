@@ -1,0 +1,181 @@
+name: Integration tests with CML
+
+on:
+  workflow_call:
+    inputs:
+      ansible_version:
+        description: Ansible-core ref to test (e.g. milestone, devel, stable-2.18)
+        required: true
+        type: string
+      lab_nodes:
+        description: JSON data with lab node information to pass to tests
+        required: true
+        type: string
+      cli_ssh_type:
+        description: CLI SSH transport to use (e.g., libssh, paramiko)
+        required: false
+        type: string
+        default: libssh
+      python-version:
+        default: >-
+          3.12
+        description: Python version to provision in the VM
+        required: false
+        type: string
+      http_var_name:
+        description: Optional variable name to use instead of ansible_http_port
+        required: false
+        type: string
+        default: "ansible_http_port"
+    secrets: {}
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: "${{ inputs.cli_ssh_type }} & ansible-core ${{ inputs.ansible_version }} @ py${{ inputs.python-version }}"
+    runs-on: ubuntu-latest
+    if: ${{ !github.event.pull_request || contains(github.event.pull_request.labels.*.name, 'safe to test') }}
+    env:
+      PY_COLORS: "1"
+      source_directory: "./source"
+      ANSIBLE_COLLECTIONS_PATHS: "/home/runner/collections:~/.ansible/collections:/usr/share/ansible/collections"
+    steps:
+      - name: Checkout the collection repository
+        uses: ansible-network/github_actions/.github/actions/checkout_dependency@1982e80100552ec93470eee63e508ebdeb1f73cc # main
+        with:
+          path: ${{ env.source_directory }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: "0"
+
+      - name: Set up Python ${{ inputs.python-version }}
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Show pip list before installs
+        run: |
+          python3 -m pip --version
+          python3 -m pip list | sort
+
+      - name: Upgrade pip and wheel
+        run: python3 -m pip install --upgrade pip wheel ansible-pylibssh paramiko scp
+
+      - name: Show pip list after base deps install
+        run: |
+          python3 -m pip list | sort
+
+      - name: Check libssh version
+        run: dpkg -l | grep libssh
+
+      - name: Install ansible-core (${{ inputs.ansible_version }}) - Release/Tag
+        env:
+          ANSIBLE_VERSION: ${{ inputs.ansible_version }}
+        run: python3 -m pip install "https://github.com/ansible/ansible/archive/$ANSIBLE_VERSION.tar.gz" --disable-pip-version-check
+        if: ${{ !contains(inputs.ansible_version, 'devel') && !contains(inputs.ansible_version, 'milestone') }}
+
+      - name: Checkout ansible-core (${{ inputs.ansible_version }}) - Branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: ansible/ansible
+          ref: ${{ inputs.ansible_version }}
+          path: ansible-core-source
+        if: ${{ contains(inputs.ansible_version, 'devel') || contains(inputs.ansible_version, 'milestone') }}
+
+      - name: Install ansible-core (${{ inputs.ansible_version }}) - Branch
+        run: python3 -m pip install ./ansible-core-source --disable-pip-version-check
+        if: ${{ contains(inputs.ansible_version, 'devel') || contains(inputs.ansible_version, 'milestone') }}
+
+      - name: Show pip list after ansible-core install
+        run: |
+          python3 -m pip list | sort
+
+      - name: Read collection metadata from galaxy.yml
+        id: identify
+        uses: ansible-network/github_actions/.github/actions/identify_collection@1982e80100552ec93470eee63e508ebdeb1f73cc # main
+        with:
+          source_path: ${{ env.source_directory }}
+
+      - name: Build and install the collection
+        uses: ansible-network/github_actions/.github/actions/build_install_collection@1982e80100552ec93470eee63e508ebdeb1f73cc # main
+        with:
+          install_python_dependencies: true
+          source_path: ${{ env.source_directory }}
+          collection_path: ${{ steps.identify.outputs.collection_path }}
+          tar_file: ${{ steps.identify.outputs.tar_file }}
+          ansible_version: ${{ inputs.ansible_version }}
+
+      - name: Print the ansible version
+        run: ansible --version
+
+      - name: Debug lab_nodes input
+        shell: bash
+        env:
+          LAB_NODES: ${{ inputs.lab_nodes }}
+        run: |
+          echo 'LAB_NODES (raw):'
+          echo "$LAB_NODES"
+          echo
+
+      - name: Debug libssh and pylibssh versions
+        shell: bash
+        run: python -c "from pylibsshext import __full_version__; print(__full_version__)"
+
+      - name: Generate inventory from lab_nodes and template
+        id: render_inventory
+        shell: bash
+        working-directory: ${{ steps.identify.outputs.collection_path }}
+        env:
+          LAB_NODES_JSON: ${{ inputs.lab_nodes }}
+          ANSIBLE_VERSION_KEY: ${{ inputs.ansible_version }}
+          RUNNER_TEMP: ${{ runner.temp }}
+          CLI_SSH_TYPE: ${{ inputs.cli_ssh_type }}
+          HTTP_VAR_NAME: ${{ inputs.http_var_name }}
+        run: |
+          set -euo pipefail
+          if ! command -v jq > /dev/null 2>&1; then
+            sudo apt-get update -y > /dev/null 2>&1 || true
+            sudo apt-get install -y jq > /dev/null 2>&1 || true
+          fi
+          ansible_host=$(echo "$LAB_NODES_JSON" | jq -r ".nodes[\"$ANSIBLE_VERSION_KEY\"]")
+          if [ -z "$ansible_host" ] || [ "$ansible_host" = "null" ]; then
+            echo "No node found for key: $ANSIBLE_VERSION_KEY"
+            echo "Available keys:" $(echo "$LAB_NODES_JSON" | jq -r '.nodes | keys | join(", ")')
+            exit 1
+          fi
+          last_octet="${ansible_host##*.}"
+          ssh_port=$((last_octet + 2000))
+          https_port=$((last_octet + 4000))
+          http_port=$((last_octet + 8000))
+          netconf_port=$((last_octet + 3000))
+          dest_host="54.190.208.146"
+          out_file="$RUNNER_TEMP/inventory-$ANSIBLE_VERSION_KEY.ini"
+
+          http_key="$HTTP_VAR_NAME"
+
+          # Build extra-vars JSON safely using jq to avoid shell metacharacter injection
+          extra_vars=$(jq -n \
+            --arg host_label "$ANSIBLE_VERSION_KEY" \
+            --arg ansible_host "$dest_host" \
+            --argjson ansible_ssh_port "$ssh_port" \
+            --argjson http_port_val "$http_port" \
+            --arg http_key "$http_key" \
+            --argjson ansible_netconf_port "$netconf_port" \
+            --arg ansible_network_cli_ssh_type "$CLI_SSH_TYPE" \
+            '{host_label: $host_label, ansible_host: $ansible_host, ansible_ssh_port: $ansible_ssh_port, ansible_netconf_port: $ansible_netconf_port, ansible_network_cli_ssh_type: $ansible_network_cli_ssh_type} + {($http_key): $http_port_val}')
+
+          ansible localhost -c local -m template \
+            -a "src=tests/integration/labs/inventory.j2 dest=${out_file} mode=0644" \
+            -e "$extra_vars"
+
+          # Sanitize out_file before writing to GITHUB_OUTPUT to prevent newline injection
+          safe_out_file=$(printf '%s' "$out_file" | tr -d '\n\r')
+          echo "inventory_path=$safe_out_file" >> "$GITHUB_OUTPUT"
+
+      - name: Run ansible-test network-integration
+        env:
+          INVENTORY_PATH: ${{ steps.render_inventory.outputs.inventory_path }}
+          LAB_NODES: ${{ inputs.lab_nodes }}
+        run: ansible-test network-integration --inventory "$INVENTORY_PATH" -vvvv
+        working-directory: ${{ steps.identify.outputs.collection_path }}

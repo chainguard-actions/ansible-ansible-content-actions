@@ -1,0 +1,19 @@
+# See https://github.com/ansible/team-devtools/blob/main/.github/workflows/ack.yml
+name: ack
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request_target:
+    types: [opened, labeled, unlabeled, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  ack:
+    uses: ansible/team-devtools/.github/workflows/ack.yml@52cd2a024bb3d3a22bba5d9169798bb9b13848a4 # main
+    secrets: inherit

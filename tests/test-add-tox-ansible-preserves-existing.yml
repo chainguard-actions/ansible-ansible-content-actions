@@ -1,0 +1,40 @@
+---
+name: Test add_tox_ansible preserves existing tox-ansible.ini
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up a collection directory with an existing tox-ansible.ini
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/test-preserves-existing"
+          cat > "$GITHUB_WORKSPACE/test-preserves-existing/tox-ansible.ini" << 'EOF'
+          [ansible]
+          skip =
+              custom_skip_value
+          EOF
+          echo "Setup: created custom tox-ansible.ini"
+          cat "$GITHUB_WORKSPACE/test-preserves-existing/tox-ansible.ini"
+
+      - name: Run add_tox_ansible action (should not overwrite)
+        uses: ./.github/actions/add_tox_ansible
+        with:
+          path: ${{ github.workspace }}/test-preserves-existing
+
+      - name: Assert tox-ansible.ini was NOT overwritten
+        run: |
+          echo "Checking if tox-ansible.ini was preserved..."
+          if [ ! -f "$GITHUB_WORKSPACE/test-preserves-existing/tox-ansible.ini" ]; then
+            echo "FAIL: tox-ansible.ini is missing"
+            exit 1
+          fi
+          echo "Contents of tox-ansible.ini:"
+          cat "$GITHUB_WORKSPACE/test-preserves-existing/tox-ansible.ini"
+          if ! grep -q "custom_skip_value" "$GITHUB_WORKSPACE/test-preserves-existing/tox-ansible.ini"; then
+            echo "FAIL: tox-ansible.ini was overwritten (custom_skip_value not found)"
+            exit 1
+          fi
+          echo "PASS: existing tox-ansible.ini was preserved"
