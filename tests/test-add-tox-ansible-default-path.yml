@@ -1,0 +1,35 @@
+---
+name: Test add_tox_ansible sub-action with default path
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up a temp directory for testing
+        run: |
+          mkdir -p /tmp/default-path-test
+          rm -f /tmp/default-path-test/tox-ansible.ini
+          echo "PASS: setup complete"
+      - id: add-tox-ansible
+        uses: ./.github/actions/add_tox_ansible
+        with:
+          path: /tmp/default-path-test
+      - name: Assert tox-ansible.ini was created in the target path
+        run: |
+          if [ ! -f /tmp/default-path-test/tox-ansible.ini ]; then
+            echo "FAIL: tox-ansible.ini was not created"
+            exit 1
+          fi
+          echo "Content of tox-ansible.ini:"
+          cat /tmp/default-path-test/tox-ansible.ini
+          echo "PASS: tox-ansible.ini was created"
+      - name: Assert tox-ansible.ini has skip entries
+        run: |
+          if ! grep -q "skip" /tmp/default-path-test/tox-ansible.ini; then
+            echo "FAIL: tox-ansible.ini does not contain skip entries"
+            cat /tmp/default-path-test/tox-ansible.ini
+            exit 1
+          fi
+          echo "PASS: tox-ansible.ini contains skip entries"

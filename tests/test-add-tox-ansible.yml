@@ -1,0 +1,58 @@
+---
+name: Test add_tox_ansible sub-action
+on:
+  workflow_dispatch:
+jobs:
+  test-creates-file:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up a temp directory without tox-ansible.ini
+        run: |
+          mkdir -p /tmp/test-collection
+          rm -f /tmp/test-collection/tox-ansible.ini
+          echo "PASS: temp directory created"
+      - id: add-tox-ansible
+        uses: ./.github/actions/add_tox_ansible
+        with:
+          path: /tmp/test-collection
+      - name: Assert tox-ansible.ini was created
+        run: |
+          if [ ! -f /tmp/test-collection/tox-ansible.ini ]; then
+            echo "FAIL: tox-ansible.ini was not created"
+            exit 1
+          fi
+          echo "Content of tox-ansible.ini:"
+          cat /tmp/test-collection/tox-ansible.ini
+          echo "PASS: tox-ansible.ini was created"
+      - name: Assert tox-ansible.ini contains [ansible] section
+        run: |
+          if ! grep -q "\[ansible\]" /tmp/test-collection/tox-ansible.ini; then
+            echo "FAIL: tox-ansible.ini does not contain [ansible] section"
+            cat /tmp/test-collection/tox-ansible.ini
+            exit 1
+          fi
+          echo "PASS: tox-ansible.ini contains [ansible] section"
+
+  test-does-not-overwrite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up a temp directory with existing tox-ansible.ini
+        run: |
+          mkdir -p /tmp/test-collection-existing
+          echo "[ansible]" > /tmp/test-collection-existing/tox-ansible.ini
+          echo "skip =" >> /tmp/test-collection-existing/tox-ansible.ini
+          echo "    custom-skip" >> /tmp/test-collection-existing/tox-ansible.ini
+      - id: add-tox-ansible-existing
+        uses: ./.github/actions/add_tox_ansible
+        with:
+          path: /tmp/test-collection-existing
+      - name: Assert existing tox-ansible.ini was not overwritten
+        run: |
+          if ! grep -q "custom-skip" /tmp/test-collection-existing/tox-ansible.ini; then
+            echo "FAIL: existing tox-ansible.ini was overwritten"
+            cat /tmp/test-collection-existing/tox-ansible.ini
+            exit 1
+          fi
+          echo "PASS: existing tox-ansible.ini was preserved"

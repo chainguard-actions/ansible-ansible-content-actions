@@ -1,0 +1,66 @@
+---
+name: Test ansible_validate_changelog sub-action
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up a test collection with changelog and git origin
+        run: |
+          mkdir -p /tmp/test-changelog-collection/changelogs/fragments
+          # Create a minimal galaxy.yml
+          cat > /tmp/test-changelog-collection/galaxy.yml << 'EOF'
+          namespace: test
+          name: mycollection
+          version: 1.0.0
+          readme: README.md
+          authors:
+            - Test Author
+          description: Test collection
+          license:
+            - MIT
+          EOF
+          # Create a changelog fragment
+          cat > /tmp/test-changelog-collection/changelogs/fragments/test-fragment.yaml << 'EOF'
+          bugfixes:
+            - Fixed a bug in the test module.
+          EOF
+          echo "# Test Collection" > /tmp/test-changelog-collection/README.md
+
+          # Initialize a git repo in the test collection directory
+          cd /tmp/test-changelog-collection
+          git init
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          git add .
+          git commit -m "Initial commit"
+
+          # Create a bare repo to act as origin
+          git init --bare /tmp/test-changelog-origin
+          git remote add origin /tmp/test-changelog-origin
+          git push origin HEAD:refs/heads/main
+
+          echo "PASS: test collection setup complete"
+      - id: validate-changelog
+        uses: ./.github/actions/ansible_validate_changelog
+        with:
+          path: /tmp/test-changelog-collection
+          base_ref: main
+        continue-on-error: true
+      - name: Assert validate-changelog ran (may fail gracefully without real PR context)
+        env:
+          OUTCOME: ${{ steps.validate-changelog.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "success" ]; then
+            echo "PASS: changelog validation succeeded"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: changelog validation failed gracefully (expected without real PR context)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

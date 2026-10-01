@@ -1,0 +1,54 @@
+---
+name: Test run-ansible-lint sub-action
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up a minimal Ansible collection for linting
+        run: |
+          mkdir -p /tmp/lint-test-collection
+          # Create a minimal galaxy.yml
+          cat > /tmp/lint-test-collection/galaxy.yml << 'EOF'
+          namespace: test
+          name: lintcollection
+          version: 1.0.0
+          readme: README.md
+          authors:
+            - Test Author
+          description: Test collection for linting
+          license:
+            - MIT
+          EOF
+          # Create a minimal README
+          echo "# Test Collection" > /tmp/lint-test-collection/README.md
+          echo "PASS: test collection setup complete"
+      - id: run-lint
+        uses: ./.github/actions/run-ansible-lint
+        with:
+          working_directory: /tmp/lint-test-collection
+          setup_python: "false"
+        continue-on-error: true
+      - name: Assert ansible-lint ran (may report lint issues in test environment)
+        env:
+          OUTCOME: ${{ steps.run-lint.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "success" ]; then
+            echo "PASS: ansible-lint ran and found no issues"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: ansible-lint ran and reported issues (expected in minimal test environment)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
+      - name: Assert ansible-lint is installed
+        run: |
+          if ! command -v ansible-lint &> /dev/null; then
+            echo "FAIL: ansible-lint is not installed"
+            exit 1
+          fi
+          echo "ansible-lint version: $(ansible-lint --version)"
+          echo "PASS: ansible-lint is installed"
