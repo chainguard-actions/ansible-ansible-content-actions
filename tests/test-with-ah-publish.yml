@@ -9,8 +9,7 @@ jobs:
       - id: action
         uses: .
         with:
-          ah_publish: "false"
-      - name: Assert action completed successfully
+          ah_publish: "true"
+      - name: Assert action ran successfully
         run: |
-          echo "Action completed with ah_publish input"
-          echo "PASS"
+          echo "PASS: action accepted ah_publish input without error"

@@ -26,11 +26,11 @@ runs:
       shell: bash
       id: get-python-version
       env:
-        TEST_ENV: ${{ inputs.test-env }}
+        INPUT_TEST_ENV: ${{ inputs.test-env }}
       run: |
-        output=$(echo "$TEST_ENV" | cut -d'-' -f2 | sed 's/py//')
+        output=$(printf '%s' "$INPUT_TEST_ENV" | cut -d'-' -f2 | sed 's/py//')
         safe=$(printf '%s' "$output" | tr -d '\n\r')
-        echo "py_version=$safe" >> $GITHUB_OUTPUT
+        echo "py_version=$safe" >> "$GITHUB_OUTPUT"
 
     - name: Set up Python ${{ steps.get-python-version.outputs.py_version}}
       uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
@@ -50,6 +50,6 @@ runs:
     - name: Run tox unit tests
       shell: bash
       env:
-        TEST_ENV: ${{ inputs.test-env }}
+        INPUT_TEST_ENV: ${{ inputs.test-env }}
       run: >-
-        python -m tox --ansible -e "$TEST_ENV"
+        python -m tox --ansible -e "$INPUT_TEST_ENV"

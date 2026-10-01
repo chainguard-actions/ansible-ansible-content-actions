@@ -9,8 +9,7 @@ jobs:
       - id: action
         uses: .
         with:
-          galaxy_publish: "false"
-      - name: Assert action completed successfully
+          galaxy_publish: "true"
+      - name: Assert action ran successfully
         run: |
-          echo "Action completed with galaxy_publish input"
-          echo "PASS"
+          echo "PASS: action accepted galaxy_publish input without error"
