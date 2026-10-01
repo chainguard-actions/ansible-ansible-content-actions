@@ -26,13 +26,13 @@ runs:
       id: inputs
       shell: bash
       env:
-        WORKING_DIRECTORY: ${{ inputs.working_directory }}
-        WORKSPACE: ${{ github.workspace }}
+        INPUT_WORKING_DIRECTORY: ${{ inputs.working_directory }}
+        GITHUB_WORKSPACE_VAL: ${{ github.workspace }}
       run: |
-        if [[ -n "$WORKING_DIRECTORY" ]]; then
-          echo "working_directory=$WORKING_DIRECTORY"
+        if [[ -n "$INPUT_WORKING_DIRECTORY" ]]; then
+          echo "working_directory=$INPUT_WORKING_DIRECTORY"
         else
-          echo "working_directory=$WORKSPACE"
+          echo "working_directory=$GITHUB_WORKSPACE_VAL"
         fi
 
     - name: Set up Python
@@ -53,6 +53,11 @@ runs:
       shell: bash
       working-directory: ${{ inputs.working_directory }}
       env:
-        ANSIBLE_LINT_ARGS: ${{ inputs.args }}
+        INPUT_ARGS: ${{ inputs.args }}
       run: |
-        ansible-lint ${ANSIBLE_LINT_ARGS:+"$ANSIBLE_LINT_ARGS"}
+        args=()
+        if [ -n "$INPUT_ARGS" ]; then
+          while IFS= read -r -d '' t; do args+=("$t"); done \
+            < <(printf '%s' "$INPUT_ARGS" | xargs printf '%s\0')
+        fi
+        ansible-lint "${args[@]}"
