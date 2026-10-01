@@ -26,8 +26,7 @@ runs:
       env:
         ACTION_PATH: ${{ github.action_path }}
         BASE_REF: ${{ inputs.base_ref }}
-      run: |
-        safe_ref=$(printf '%s' "$BASE_REF" | tr -d '\n\r')
-        python3 "$ACTION_PATH/validate_changelog.py" --ref "$safe_ref"
+      run: >-
+        python3 "$ACTION_PATH/validate_changelog.py" --ref "$BASE_REF"
       shell: bash
       working-directory: "${{ inputs.path }}"

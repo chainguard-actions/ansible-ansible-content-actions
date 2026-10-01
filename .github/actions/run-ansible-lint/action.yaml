@@ -53,6 +53,11 @@ runs:
       shell: bash
       working-directory: ${{ inputs.working_directory }}
       env:
-        ANSIBLE_LINT_ARGS: ${{ inputs.args }}
+        INPUT_ARGS: ${{ inputs.args }}
       run: |
-        ansible-lint ${ANSIBLE_LINT_ARGS:+"$ANSIBLE_LINT_ARGS"}
+        args=()
+        if [ -n "$INPUT_ARGS" ]; then
+          while IFS= read -r -d '' t; do args+=("$t"); done \
+            < <(printf '%s' "$INPUT_ARGS" | xargs printf '%s\0')
+        fi
+        ansible-lint "${args[@]}"
