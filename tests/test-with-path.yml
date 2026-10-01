@@ -1,5 +1,5 @@
 ---
-name: Test all inputs provided
+name: Test with path input
 on:
   workflow_dispatch:
 jobs:
@@ -14,13 +14,7 @@ jobs:
         continue-on-error: true
         with:
           path: /tmp/test-collection
-          base_ref: main
-          repo: https://github.com/ansible/ansible-content-actions
-          environment: staging
-          ah_publish: "false"
-          galaxy_publish: "false"
-          collection_pre_install: "community.general"
-      - name: Assert action ran with all inputs (composite action with no steps)
+      - name: Assert action ran with path input (composite action with no steps)
         env:
           OUTCOME: ${{ steps.action.outcome }}
         run: |
