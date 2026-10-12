@@ -27,12 +27,12 @@ runs:
       shell: bash
       env:
         WORKING_DIRECTORY: ${{ inputs.working_directory }}
-        GITHUB_WORKSPACE_VAL: ${{ github.workspace }}
+        WORKSPACE: ${{ github.workspace }}
       run: |
         if [[ -n "$WORKING_DIRECTORY" ]]; then
           echo "working_directory=$WORKING_DIRECTORY"
         else
-          echo "working_directory=$GITHUB_WORKSPACE_VAL"
+          echo "working_directory=$WORKSPACE"
         fi
 
     - name: Set up Python

@@ -47,7 +47,6 @@ runs:
       env:
         SCOPE: ${{ inputs.scope }}
       run: |
-        output=$(uv run tox --ansible --gh-matrix --matrix-scope "$SCOPE" --conf tox-ansible.ini)
-        echo "$output"
-        safe=$(printf '%s' "$output" | tr -d '\n\r')
-        echo "envlist=$safe" >> "$GITHUB_OUTPUT"
+        raw=$(uv run tox --ansible --gh-matrix --matrix-scope "$SCOPE" --conf tox-ansible.ini) || true
+        output=$(printf '%s' "$raw" | tr -d '\n\r')
+        echo "envlist=$output" >> "$GITHUB_OUTPUT"
