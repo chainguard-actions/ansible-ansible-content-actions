@@ -10,119 +10,65 @@
 
 **Harden Agent Version:** `2`
 
-Action **ansible--ansible-content-actions/v0.1.1** was hardened automatically. 13 finding(s) were identified and resolved across 1 iteration(s).
+Action **ansible--ansible-content-actions/v0.1.1** was hardened automatically. 3 finding(s) were identified and resolved across 2 iteration(s).
 
 ## Findings Fixed
 
 ### script-injection (severity: high)
 
-Rule (a): ${{ github.action_path }} and ${{ inputs.base_ref }} are directly interpolated inside a run: shell command. An attacker controlling the calling workflow's inputs can inject arbitrary shell commands via inputs.base_ref.
+Multiple run: blocks directly interpolate ${{ }} expressions into shell commands, enabling script injection. An attacker-controlled input value can break out of the shell command context and execute arbitrary code.
+
+- ansible_validate_changelog/action.yaml: `python3 ${{ github.action_path }}/validate_changelog.py --ref ${{ inputs.base_ref }}` — both github.action_path and inputs.base_ref are interpolated directly into the shell command (sub-rule a).
+- generate-tox-ansible-matrix/action.yaml: `--matrix-scope ${{ inputs.scope }}` — inputs.scope is interpolated directly into the shell command (sub-rule a).
+- run-ansible-lint/action.yaml: `if [[ -n "${{ inputs.working_directory }}" ]]`, `echo "working_directory=${{ inputs.working_directory }}"`, `echo "working_directory=${{ github.workspace }}"`, and `ansible-lint ${{ inputs.args }}` — inputs.* and github.* are interpolated directly into run: blocks (sub-rule a).
+- run-sanity/action.yaml: `output=$(echo ${{ inputs.test-env }} | cut -d'-' -f2 | sed 's/py//')` and `python -m tox --ansible -e ${{ inputs.test-env }}` — inputs.test-env is interpolated directly (sub-rule a).
+- run-unit-galaxy/action.yaml: `output=$(echo ${{ inputs.test-env }} | cut -d'-' -f2 | sed 's/py//')` and `python -m tox --ansible -e ${{ inputs.test-env }}` — inputs.test-env is interpolated directly (sub-rule a).
 
 Locations:
 
-- `.github/actions/ansible_validate_changelog/action.yaml:25`
-
-### script-injection (severity: high)
-
-Rule (a): ${{ inputs.scope }} is directly interpolated inside a run: shell command (`echo output=$(python -m tox --ansible --gh-matrix --matrix-scope ${{ inputs.scope }} ...)`). An attacker-controlled input value can inject arbitrary shell commands.
-
-Locations:
-
-- `.github/actions/generate-tox-ansible-matrix/action.yaml:42`
-
-### script-injection (severity: high)
-
-Rule (a): ${{ inputs.working_directory }} and ${{ github.workspace }} are directly interpolated inside a run: shell block (lines 27-30). Additionally, ${{ inputs.args }} is directly interpolated in the ansible-lint run: command (line 48), allowing shell command injection via attacker-controlled inputs.
-
-Locations:
-
-- `.github/actions/run-ansible-lint/action.yaml:27`
-- `.github/actions/run-ansible-lint/action.yaml:48`
-
-### script-injection (severity: high)
-
-Rule (a): ${{ inputs.test-env }} is directly interpolated inside two run: shell commands — once in a command substitution (`output=$(echo ${{ inputs.test-env }} | cut ...)`, line 26) and once as a tox -e argument (line 38). An attacker-controlled input can inject arbitrary shell commands.
-
-Locations:
-
-- `.github/actions/run-sanity/action.yaml:26`
-- `.github/actions/run-sanity/action.yaml:38`
-
-### script-injection (severity: high)
-
-Rule (a): ${{ inputs.test-env }} is directly interpolated inside two run: shell commands — once in a command substitution (`output=$(echo ${{ inputs.test-env }} | cut ...)`, line 26) and once as a tox -e argument (line 44). An attacker-controlled input can inject arbitrary shell commands.
-
-Locations:
-
-- `.github/actions/run-unit-galaxy/action.yaml:26`
-- `.github/actions/run-unit-galaxy/action.yaml:44`
-
-### github-env-injection (severity: high)
-
-The 'Generate matrix' step writes $output (derived directly from ${{ inputs.scope }} without sanitization) to $GITHUB_OUTPUT via `echo "envlist=$output" >> $GITHUB_OUTPUT`. A newline in inputs.scope could inject additional key=value pairs into the output file.
-
-Locations:
-
-- `.github/actions/generate-tox-ansible-matrix/action.yaml:43`
-
-### github-env-injection (severity: high)
-
-The 'Get python-version from test-env' step writes $output (derived from ${{ inputs.test-env }} via command substitution, without sanitization) to $GITHUB_OUTPUT via `echo "py_version=$output" >> $GITHUB_OUTPUT`. A newline embedded in inputs.test-env could inject additional key=value pairs.
-
-Locations:
-
+- `.github/actions/ansible_validate_changelog/action.yaml:24`
+- `.github/actions/generate-tox-ansible-matrix/action.yaml:47`
+- `.github/actions/run-ansible-lint/action.yaml:23`
+- `.github/actions/run-ansible-lint/action.yaml:46`
 - `.github/actions/run-sanity/action.yaml:27`
+- `.github/actions/run-sanity/action.yaml:44`
+- `.github/actions/run-unit-galaxy/action.yaml:27`
+- `.github/actions/run-unit-galaxy/action.yaml:55`
 
 ### github-env-injection (severity: high)
 
-The 'Get python-version from test-env' step writes $output (derived from ${{ inputs.test-env }} via command substitution, without sanitization) to $GITHUB_OUTPUT via `echo "py_version=$output" >> $GITHUB_OUTPUT`. A newline embedded in inputs.test-env could inject additional key=value pairs.
+Three run: blocks write values derived from ${{ inputs.* }} expressions to $GITHUB_OUTPUT without the required sanitization step (`printf '%s' ... | tr -d '\n\r'`). An attacker-supplied newline in the input can inject arbitrary key=value pairs into the GitHub output environment.
+
+- generate-tox-ansible-matrix/action.yaml: `${{ inputs.scope }}` is interpolated into the shell command that sets `$output`, which is then written via `echo "envlist=$output" >> $GITHUB_OUTPUT` with no sanitization.
+- run-sanity/action.yaml: `${{ inputs.test-env }}` is interpolated into `output=$(echo ${{ inputs.test-env }} | ...)`, and `$output` is written via `echo "py_version=$output" >> $GITHUB_OUTPUT` with no sanitization.
+- run-unit-galaxy/action.yaml: Same pattern as run-sanity — `${{ inputs.test-env }}` flows into `$output` which is written to `$GITHUB_OUTPUT` without sanitization.
 
 Locations:
 
-- `.github/actions/run-unit-galaxy/action.yaml:27`
+- `.github/actions/generate-tox-ansible-matrix/action.yaml:48`
+- `.github/actions/run-sanity/action.yaml:28`
+- `.github/actions/run-unit-galaxy/action.yaml:28`
 
 ### unpinned-uses (severity: high)
 
-Multiple `uses:` references are pinned to mutable tags instead of full 40-character commit SHAs, making them vulnerable to supply-chain attacks if the tag is moved: `actions/setup-python@v4` (line 17), which could be silently updated to a malicious version.
+All uses: references across the composite action files use mutable tag refs (@v3, @v4, @v5) instead of immutable 40-character SHA commit hashes. This exposes the action to supply-chain attacks where a compromised upstream action tag could silently execute malicious code.
+
+Failing references:
+- actions/setup-python@v4 (ansible_validate_changelog, generate-tox-ansible-matrix, run-sanity, run-unit-galaxy)
+- actions/github-script@v3 (generate-tox-ansible-matrix, run-sanity, run-unit-galaxy)
+- actions/setup-python@v5 (run-ansible-lint)
+- actions/setup-python@v4 (run-ansible-lint)
 
 Locations:
 
 - `.github/actions/ansible_validate_changelog/action.yaml:17`
-
-### unpinned-uses (severity: high)
-
-Multiple `uses:` references are pinned to mutable tags instead of full 40-character commit SHAs: `actions/github-script@v3` (line 21) and `actions/setup-python@v4` (line 27). These are vulnerable to supply-chain attacks if the tags are moved.
-
-Locations:
-
-- `.github/actions/generate-tox-ansible-matrix/action.yaml:21`
+- `.github/actions/generate-tox-ansible-matrix/action.yaml:20`
 - `.github/actions/generate-tox-ansible-matrix/action.yaml:27`
-
-### unpinned-uses (severity: high)
-
-The `uses:` reference `actions/setup-python@v5` (line 35) is pinned to a mutable tag instead of a full 40-character commit SHA, making it vulnerable to supply-chain attacks.
-
-Locations:
-
-- `.github/actions/run-ansible-lint/action.yaml:35`
-
-### unpinned-uses (severity: high)
-
-Multiple `uses:` references are pinned to mutable tags instead of full 40-character commit SHAs: `actions/github-script@v3` (line 18) and `actions/setup-python@v4` (line 30). These are vulnerable to supply-chain attacks if the tags are moved.
-
-Locations:
-
-- `.github/actions/run-sanity/action.yaml:18`
-- `.github/actions/run-sanity/action.yaml:30`
-
-### unpinned-uses (severity: high)
-
-Multiple `uses:` references are pinned to mutable tags instead of full 40-character commit SHAs: `actions/github-script@v3` (line 18) and `actions/setup-python@v4` (line 30). These are vulnerable to supply-chain attacks if the tags are moved.
-
-Locations:
-
-- `.github/actions/run-unit-galaxy/action.yaml:18`
-- `.github/actions/run-unit-galaxy/action.yaml:30`
+- `.github/actions/run-ansible-lint/action.yaml:31`
+- `.github/actions/run-sanity/action.yaml:20`
+- `.github/actions/run-sanity/action.yaml:33`
+- `.github/actions/run-unit-galaxy/action.yaml:20`
+- `.github/actions/run-unit-galaxy/action.yaml:34`
 
 ## Iteration Notes
 
@@ -134,13 +80,21 @@ Locations:
 
 Fixed all 5 action files:
 
-1. ansible_validate_changelog/action.yaml: Moved github.action_path and inputs.base_ref to env block (ACTION_PATH, BASE_REF); pinned setup-python@v4 to SHA 7f4fc3e.
+1. ansible_validate_changelog/action.yaml: Pinned actions/setup-python@v4 to SHA. Moved github.action_path and inputs.base_ref into env: block as ACTION_PATH and BASE_REF.
 
-2. generate-tox-ansible-matrix/action.yaml: Moved inputs.scope to env block (INPUT_SCOPE); sanitized output with tr -d '\n\r' before writing to GITHUB_OUTPUT; pinned github-script@v3 to SHA ffc2c79 and setup-python@v4 to SHA 7f4fc3e.
+2. generate-tox-ansible-matrix/action.yaml: Pinned actions/github-script@v3 and actions/setup-python@v4 to SHAs. Moved inputs.scope into env: block as MATRIX_SCOPE. Added sanitization (tr -d '\n\r') before writing to $GITHUB_OUTPUT.
 
-3. run-ansible-lint/action.yaml: Moved inputs.working_directory and github.workspace to env block; used xargs tokenization with bash array for inputs.args (argument list); pinned setup-python@v5 to SHA a26af69.
+3. run-ansible-lint/action.yaml: Pinned actions/setup-python@v5 to SHA. Moved inputs.working_directory and github.workspace into env: block. Moved inputs.args into env: block and used xargs tokenization (since it's a list-style argument input) to safely expand it as separate arguments to ansible-lint.
 
-4. run-sanity/action.yaml: Moved inputs.test-env to env block (INPUT_TEST_ENV); used printf instead of echo to avoid injection; sanitized py_version output with tr -d '\n\r' before writing to GITHUB_OUTPUT; pinned github-script@v3 to SHA ffc2c79 and setup-python@v4 to SHA 7f4fc3e.
+4. run-sanity/action.yaml: Pinned actions/github-script@v3 and actions/setup-python@v4 to SHAs. Moved inputs.test-env into env: block as TEST_ENV in both steps. Added two-step capture (raw then sanitized output) before writing py_version to $GITHUB_OUTPUT.
 
-5. run-unit-galaxy/action.yaml: Same fixes as run-sanity; pinned github-script@v3 to SHA ffc2c79 and setup-python@v4 to SHA 7f4fc3e.
+5. run-unit-galaxy/action.yaml: Pinned actions/github-script@v3 and actions/setup-python@v4 to SHAs. Moved inputs.test-env into env: block as TEST_ENV in both steps. Added two-step capture (raw then sanitized output) before writing py_version to $GITHUB_OUTPUT.
+
+### Iteration 1
+
+**Fixes applied:** publish-gate
+
+**Notes:**
+
+Fixed .github/actions/generate-tox-ansible-matrix/action.yaml line 49: added '|| true' to the bare assignment 'output=$(python -m tox --ansible --gh-matrix --matrix-scope "$MATRIX_SCOPE" --conf tox-ansible.ini)' to preserve upstream's behavior where the command was run inside echo/printf "$(...)", hiding the command's exit status and allowing the step to continue even on non-zero exit.
 
