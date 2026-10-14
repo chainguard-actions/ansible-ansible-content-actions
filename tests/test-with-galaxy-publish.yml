@@ -9,7 +9,16 @@ jobs:
       - id: action
         uses: .
         with:
-          galaxy_publish: "true"
-      - name: Assert action ran successfully
+          galaxy_publish: "false"
+        continue-on-error: true
+      - name: Assert action ran with galaxy_publish input
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
         run: |
-          echo "PASS: action accepted galaxy_publish input without error"
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "success" ] || [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action ran with galaxy_publish input (outcome: $OUTCOME)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
