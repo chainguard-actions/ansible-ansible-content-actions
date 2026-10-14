@@ -44,9 +44,6 @@ runs:
       id: generate-matrix
       shell: bash
       env:
-        INPUT_SCOPE: ${{ inputs.scope }}
+        SCOPE: ${{ inputs.scope }}
       run: |
-        safe_scope=$(printf '%s' "$INPUT_SCOPE" | tr -d '\n\r')
-        output=$(python -m tox --ansible --gh-matrix --matrix-scope "$safe_scope" --conf tox-ansible.ini) || true
-        safe_output=$(printf '%s' "$output" | tr -d '\n\r')
-        echo "envlist=$safe_output" >> "$GITHUB_OUTPUT"
+        output=$(python -m tox --ansible --gh-matrix --matrix-scope "$SCOPE" --conf tox-ansible.ini) || true
