@@ -28,7 +28,7 @@ runs:
       env:
         TEST_ENV: ${{ inputs.test-env }}
       run: |
-        raw=$(printf '%s' "$TEST_ENV" | cut -d'-' -f2 | sed 's/py//')
+        raw=$(echo "$TEST_ENV" | cut -d'-' -f2 | sed 's/py//')
         output=$(printf '%s' "$raw" | tr -d '\n\r')
         echo "py_version=$output" >> "$GITHUB_OUTPUT"
 

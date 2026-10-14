@@ -49,4 +49,3 @@ runs:
       run: |
         raw=$(uv run tox --ansible --gh-matrix --matrix-scope "$SCOPE" --conf tox-ansible.ini) || true
         output=$(printf '%s' "$raw" | tr -d '\n\r')
-        echo "envlist=$output" >> "$GITHUB_OUTPUT"
