@@ -17,7 +17,7 @@ runs:
     # https://github.com/actions/runner/issues/1070
     - name: Fail early if no scope was provided for matrix generation
       if: ${{ inputs.test-env == '' }}
-      uses: actions/github-script@ffc2c79a5b2490bd33e0a41c1de74b877714d736 # v3
+      uses: actions/github-script@v3
       with:
         script: |
           core.setFailed('The input test-env (e.g., unit-py3.9-2.14) is required for this action to run.')
@@ -25,15 +25,12 @@ runs:
     - name: Get python-version from test-env
       shell: bash
       id: get-python-version
-      env:
-        TEST_ENV: ${{ inputs.test-env }}
       run: |
-        raw=$(echo "$TEST_ENV" | cut -d'-' -f2 | sed 's/py//')
-        output=$(printf '%s' "$raw" | tr -d '\n\r')
-        echo "py_version=$output" >> "$GITHUB_OUTPUT"
+        output=$(echo ${{ inputs.test-env }} | cut -d'-' -f2 | sed 's/py//')
+        echo "py_version=$output" >> $GITHUB_OUTPUT
 
     - name: Set up Python
-      uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4
+      uses: actions/setup-python@v4
       with:
         python-version: "${{ steps.get-python-version.outputs.py_version}}"
 
@@ -43,7 +40,5 @@ runs:
 
     - name: Run tox sanity tests
       shell: bash
-      env:
-        TEST_ENV: ${{ inputs.test-env }}
       run: >-
-        python -m tox --ansible -e "$TEST_ENV"
+        python -m tox --ansible -e ${{ inputs.test-env }}
