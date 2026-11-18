@@ -15,7 +15,7 @@ runs:
   using: composite
   steps:
     - name: Setup python
-      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      uses: actions/setup-python@v6
       with:
         python-version: "3.14"
     - name: Install python dependencies
@@ -23,10 +23,8 @@ runs:
         pip install -U pyyaml
       shell: bash
     - name: Validate changelog
-      env:
-        ACTION_PATH: ${{ github.action_path }}
-        BASE_REF: ${{ inputs.base_ref }}
       run: >-
-        python3 "$ACTION_PATH/validate_changelog.py" --ref "$BASE_REF"
+        python3 ${{ github.action_path }}/validate_changelog.py --ref ${{
+        inputs.base_ref }}
       shell: bash
       working-directory: "${{ inputs.path }}"

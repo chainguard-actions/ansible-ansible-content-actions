@@ -25,19 +25,16 @@ runs:
     - name: Show inputs
       id: inputs
       shell: bash
-      env:
-        WORKING_DIRECTORY: ${{ inputs.working_directory }}
-        GITHUB_WORKSPACE_VAL: ${{ github.workspace }}
       run: |
-        if [[ -n "$WORKING_DIRECTORY" ]]; then
-          echo "working_directory=$WORKING_DIRECTORY"
+        if [[ -n "${{ inputs.working_directory }}" ]]; then
+          echo "working_directory=${{ inputs.working_directory }}"
         else
-          echo "working_directory=$GITHUB_WORKSPACE_VAL"
+          echo "working_directory=${{ github.workspace }}"
         fi
 
     - name: Set up Python
       if: inputs.setup_python == 'true'
-      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      uses: actions/setup-python@v6
       with:
         cache: pip
         cache-dependency-path: ${{ inputs.working_directory }}/.git/ansible-lint-requirements.txt
@@ -52,12 +49,5 @@ runs:
     - name: Run ansible-lint
       shell: bash
       working-directory: ${{ inputs.working_directory }}
-      env:
-        INPUT_ARGS: ${{ inputs.args }}
       run: |
-        args=()
-        if [ -n "$INPUT_ARGS" ]; then
-          while IFS= read -r -d '' t; do args+=("$t"); done \
-            < <(printf '%s' "$INPUT_ARGS" | xargs printf '%s\0')
-        fi
-        ansible-lint "${args[@]}"
+        ansible-lint ${{ inputs.args }}
